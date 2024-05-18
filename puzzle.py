@@ -18,7 +18,7 @@ class Puzzle:
             self.evaluation_function=self.heuristic+self.path_cost
         Puzzle.num_of_instances+=1
 
-    def __str__(self):
+    def __str__(self):  # 打印状态，九宫格形式
         return str(self.state[0:3])+'\n'+str(self.state[3:6])+'\n'+str(self.state[6:9])
 
     def generate_heuristic(self):
