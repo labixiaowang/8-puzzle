@@ -61,7 +61,7 @@ def get_fashion_mnist_labels(labels):
 
 class Residual(nn.Module):
     # 可以设定输出通道数、是否使用额外的1x1卷积层来修改通道数以及卷积层的步幅。
-    def __init__(self, in_c, out_c, c1, c2, c3, c4, use_1x1conv=False, stride=1):
+    def __init__(self, in_c,c1, c2, c3, c4, use_1x1conv=False, stride=1):
         '''
         :param in_c: 输入通道数
         :param out_c:输出通道数
@@ -84,21 +84,19 @@ class Residual(nn.Module):
         self.p4_1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.p4_2 = nn.Conv2d(in_c, c4, kernel_size=1, stride=stride)
 
-        if use_1x1conv:
-            self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=1, stride=stride)
-        else:
-            self.conv1 = None
-        self.bn = nn.BatchNorm2d(out_c)
+        # if use_1x1conv:
+        #     self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=1, stride=stride)
+        # else:
+        #     self.conv1 = None
+        # self.bn = nn.BatchNorm2d(out_c)
 
     def forward(self, X):
         p1 = F.relu(self.p1_1(X))
         p2 = F.relu(self.p2_2(F.relu(self.p2_1(X))))
         p3 = F.relu(self.p3_2(F.relu(self.p3_1(X))))
         p4 = F.relu(self.p4_2(self.p4_1(X)))
-        Y = self.bn(torch.cat((p1, p2, p3, p4), dim=1)) # 沿着通道维度拼接
-        if self.conv1:
-            X = self.conv1(X)
-        return F.relu(Y + X)
+        Y = torch.cat((p1, p2, p3, p4), dim=1)# 沿着通道维度拼接
+        return Y
 
 
 def resnet_block(in_c, out_c, c1, c2, c3, c4, num_residuals, first_block=False):
@@ -127,26 +125,49 @@ class FlattenLayer(torch.nn.Module):  #展平操作
         return x.view(x.shape[0], -1)
 
 # torch.nn.Sequential是一个Sequential容器，模块将按照构造函数中传递的顺序添加到模块中。
-net = nn.Sequential(
-    	# 添加第一个卷积层，调用了nn里面的Conv2d()
-        nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
-        # 进行数据的归一化处理
-    	nn.BatchNorm2d(32),
-    	# 修正线性单元，是一种人工神经网络中常用的激活函数
-        nn.ReLU(),
-    	# 再进行最大池化处理
-        nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
-# 依次添加resnet_block模块
-net.add_module("resnet_block1", resnet_block(32, 32, 8, (4, 8), (4, 8), 8, 2, first_block=True))
-net.add_module("resnet_block2", resnet_block(32, 80, 16, (16, 32), (8, 16), 16, 2))
-net.add_module("resnet_block3", resnet_block(80, 192, 32, (32, 64), (32, 64), 32, 2))
-net.add_module("resnet_block4", resnet_block(192, 320, 64, (64, 128), (32, 64), 64, 2))
-# 添加GlobalAvgPool2d模块
-net.add_module("global_avg_pool", GlobalAvgPool2d()) # GlobalAvgPool2d的输出: (Batch, 256, 1, 1)
-# 添加FlattenLayer模块，再接一个全连接层
-net.add_module("fc", nn.Sequential(FlattenLayer(), nn.Linear(320, 10)))
-# 模型定义-ResNet
-print(net)
+# net = nn.Sequential(
+#     	# 添加第一个卷积层，调用了nn里面的Conv2d()
+#         nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+#         # 进行数据的归一化处理
+#     	nn.BatchNorm2d(32),
+#     	# 修正线性单元，是一种人工神经网络中常用的激活函数
+#         nn.ReLU(),
+#     	# 再进行最大池化处理
+#         nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+# # 依次添加resnet_block模块
+# net.add_module("resnet_block1", resnet_block(32, 32, 8, (4, 8), (4, 8), 8, 2, first_block=True))
+# net.add_module("resnet_block2", resnet_block(32, 80, 16, (16, 32), (8, 16), 16, 2))
+# net.add_module("resnet_block3", resnet_block(80, 192, 32, (32, 64), (32, 64), 32, 2))
+# net.add_module("resnet_block4", resnet_block(192, 320, 64, (64, 128), (32, 64), 64, 2))
+# # 添加GlobalAvgPool2d模块
+# net.add_module("global_avg_pool", GlobalAvgPool2d()) # GlobalAvgPool2d的输出: (Batch, 256, 1, 1)
+# # 添加FlattenLayer模块，再接一个全连接层
+# net.add_module("fc", nn.Sequential(FlattenLayer(), nn.Linear(320, 10)))
+# # 模型定义-ResNet
+# print(net)
+
+b1 = nn.Sequential(nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3),
+                   nn.ReLU(),
+                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+b2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=1),
+                   nn.ReLU(),
+                   nn.Conv2d(64, 192, kernel_size=3, padding=1),
+                   nn.ReLU(),
+                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+b3 = nn.Sequential(Residual(192, 64, (96, 128), (16, 32), 32),
+                   Residual(256, 128, (128, 192), (32, 96), 64),
+                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+b4 = nn.Sequential(Residual(480, 192, (96, 208), (16, 48), 64),
+                   Residual(512, 160, (112, 224), (24, 64), 64),
+                   Residual(512, 128, (128, 256), (24, 64), 64),
+                   Residual(512, 112, (144, 288), (32, 64), 64),
+                   Residual(528, 256, (160, 320), (32, 128), 128),
+                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+b5 = nn.Sequential(Residual(832, 256, (160, 320), (32, 128), 128),
+                   Residual(832, 384, (192, 384), (48, 128), 128),
+                   nn.AdaptiveAvgPool2d((1,1)),
+                   nn.Flatten())
+net = nn.Sequential(b1, b2, b3, b4, b5, nn.Linear(1024, 10))
 
 def evaluate_accuracy(data_iter, net, device=torch.device('cpu')):
     """Evaluate accuracy of a model on the given data set."""
@@ -195,9 +216,9 @@ def train_ch(net, train_iter, test_iter, criterion, num_epochs, device, lr=None)
         if test_acc > best_test_acc:
             # print('find best! save at model/best.pth')
             best_test_acc = test_acc
-            torch.save(net.state_dict(), 'model/best.pth')
+            torch.save(net.state_dict(), 'model/best3.pth')
 
 # 超参数设置
-lr, num_epochs = 0.001, 7
+lr, num_epochs = 0.1, 7
 criterion = nn.CrossEntropyLoss()   #交叉熵描述了两个概率分布之间的距离，交叉熵越小说明两者之间越接近
 train_ch(net, train_iter, test_iter, criterion, num_epochs, device, lr)
